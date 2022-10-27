@@ -7,18 +7,6 @@ from scipy.stats import norm
 disable_eager_execution()
 
 
-def example():
-    w = np.random.normal(0., np.sqrt(T / N), (d, N))
-    v = np.random.normal(0., np.sqrt(T / N), (d, N))
-    y = [np.zeros((d, ))]
-    z = [np.zeros((d, ))]
-    for i in range(N):
-        z.append(z[-1] + beta * T / N * y[-1] + v[:, i])
-        y.append(y[-1] + gamma * T/N * y[-1] / (1. + np.sum(y[-1] ** 2)) + np.sum(w[:, i]) / np.sqrt(d))
-
-    return v, y, z
-
-
 def ref_solution(v, y):
     v = tf.cumsum(tf.expand_dims(tf.cast(v, tf.float32), axis=0), axis=2)
     y = tf.cast(tf.expand_dims(tf.stack(y, axis=1), axis=0), tf.float32)
@@ -54,26 +42,22 @@ T = 1.
 N = 100
 
 batch_size = 1024 * 8
-mc_runs = 500 
-train_steps = 12000
-
+mc_runs = 500
 
 _file = open('Zakai_results.csv', 'w')
 _file.write('d, T, N, run, value, cil, cir, time\n')
 
-for d in [1, 5, 10, 20, 25, 50, 75, 100]:
+for d in [1, 2, 5, 10, 20, 25, 50, 75, 100]:
 
-    for run in range(5):
+    for run in range(1):
 
         t_0 = time.time()
 
         tf.compat.v1.reset_default_graph()
-        v, y, z = example()
+        z = np.random.normal(0., np.sqrt(T / N), (d, N))
+        y = [np.zeros((d,))] * N
 
-        z = np.stack(z, axis=1)
-        z = np.diff(z, axis=1)
-
-        p_mean, p_var = ref_solution(v, y)
+        p_mean, p_var = ref_solution(z, y)
 
         p_m_l, p_v_l = [], []
         with tf.compat.v1.Session() as sess:
@@ -87,7 +71,7 @@ for d in [1, 5, 10, 20, 25, 50, 75, 100]:
         p_v = np.sum(np.array(p_v_l)) / mc_runs + np.var(p_m_l)
         tmp = norm.ppf(0.975) * np.sqrt(p_v / (mc_runs * batch_size - 1.))
 
-        b1 = np.cumsum(v, 1)
+        b1 = np.cumsum(z, 1)
         u_reference = p_m * np.exp(np.sum(beta * 0. * b1[:, -1]))
 
         ci1 = p_m - tmp
